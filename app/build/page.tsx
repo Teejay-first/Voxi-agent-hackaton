@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Sparkles, Check, Loader2 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
@@ -19,22 +19,97 @@ const buildSteps = [
 
 export default function BuildPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [currentStep, setCurrentStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const [isComplete, setIsComplete] = useState(false)
+  const [productCount, setProductCount] = useState(0)
+  const [buildError, setBuildError] = useState<string | null>(null)
+
+  const storeUrl = searchParams.get("storeUrl")
+  const useDummyData = searchParams.get("useDummyData") === "true"
 
   useEffect(() => {
-    if (currentStep < buildSteps.length) {
-      const timer = setTimeout(() => {
-        setCurrentStep(currentStep + 1)
-        setProgress(((currentStep + 1) / buildSteps.length) * 100)
-      }, buildSteps[currentStep].duration)
+    const runBuildSteps = async () => {
+      // Step 2 is the product catalog learning step
+      if (currentStep === 1 && !useDummyData && storeUrl) {
+        try {
+          console.log("[Voxi] Fetching products from Firecrawl for URL:", storeUrl)
 
-      return () => clearTimeout(timer)
-    } else {
-      setIsComplete(true)
+          // Call Firecrawl API to scrape products
+          const firecrawlResponse = await fetch("/api/scrape-products-bulk", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              urls: [storeUrl],
+            }),
+          })
+
+          if (!firecrawlResponse.ok) {
+            const errorData = await firecrawlResponse.json()
+            throw new Error(errorData.error || "Failed to scrape products")
+          }
+
+          const firecrawlData = await firecrawlResponse.json()
+          console.log("[Voxi] Firecrawl response:", firecrawlData)
+
+          if (firecrawlData.products && firecrawlData.products.length > 0) {
+            // Save products to Supabase
+            const saveResponse = await fetch("/api/products/save", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                products: firecrawlData.products,
+              }),
+            })
+
+            if (!saveResponse.ok) {
+              const saveErrorData = await saveResponse.json()
+              throw new Error(saveErrorData.error || "Failed to save products")
+            }
+
+            const saveData = await saveResponse.json()
+            console.log("[Voxi] Products saved:", saveData)
+            setProductCount(saveData.savedCount)
+
+            if (saveData.errors && saveData.errors.length > 0) {
+              console.warn("[Voxi] Some products had errors:", saveData.errors)
+            }
+          } else {
+            console.warn("[Voxi] No products returned from Firecrawl")
+            setBuildError("No products found on the store. Using demo products instead.")
+            setProductCount(3) // Default demo products
+          }
+        } catch (error) {
+          console.error("[Voxi] Error during product scraping:", error)
+          setBuildError(
+            error instanceof Error
+              ? error.message
+              : "Failed to fetch products from store. Using demo products instead."
+          )
+          setProductCount(3) // Fallback to demo products
+        }
+      }
+
+      // Continue to next step
+      if (currentStep < buildSteps.length) {
+        const timer = setTimeout(() => {
+          setCurrentStep(currentStep + 1)
+          setProgress(((currentStep + 1) / buildSteps.length) * 100)
+        }, buildSteps[currentStep].duration)
+
+        return () => clearTimeout(timer)
+      } else {
+        setIsComplete(true)
+      }
     }
-  }, [currentStep])
+
+    runBuildSteps()
+  }, [currentStep, useDummyData, storeUrl])
 
   const handleContinue = () => {
     router.push("/dashboard")
@@ -76,7 +151,9 @@ export default function BuildPage() {
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <div className="text-2xl font-bold text-emerald-600 font-poppins">247</div>
+                    <div className="text-2xl font-bold text-emerald-600 font-poppins">
+                      {productCount || 247}
+                    </div>
                     <div className="text-xs text-neutral-500 font-poppins tracking-tight">Products Learned</div>
                   </div>
                   <div>
@@ -89,6 +166,12 @@ export default function BuildPage() {
                   </div>
                 </div>
               </div>
+
+              {buildError && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
+                  <p className="text-sm text-amber-800 font-poppins tracking-tight">{buildError}</p>
+                </div>
+              )}
 
               <Button
                 onClick={handleContinue}

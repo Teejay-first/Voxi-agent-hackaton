@@ -17,16 +17,38 @@ export default function OnboardingPage() {
   const [storeUrl, setStoreUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [useDummyData, setUseDummyData] = useState(true)
+  const [error, setError] = useState("")
+
+  const validateUrl = (url: string): boolean => {
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Validate URL if using live data
+    if (!useDummyData && !validateUrl(storeUrl)) {
+      setError("Please enter a valid store URL")
+      setIsLoading(false)
+      return
+    }
 
-    // Navigate to build mode
-    router.push("/build")
+    // Build query params for the build page
+    const params = new URLSearchParams()
+    if (!useDummyData) {
+      params.append("storeUrl", storeUrl)
+    }
+    params.append("useDummyData", String(useDummyData))
+
+    // Navigate to build mode with params
+    router.push(`/build?${params.toString()}`)
   }
 
   return (
@@ -71,9 +93,12 @@ export default function OnboardingPage() {
                     type="url"
                     placeholder="https://yourstore.com"
                     value={storeUrl}
-                    onChange={(e) => setStoreUrl(e.target.value)}
+                    onChange={(e) => {
+                      setStoreUrl(e.target.value)
+                      setError("")
+                    }}
                     className="pl-11 bg-neutral-50 border-neutral-200 text-neutral-900 placeholder:text-neutral-400 h-12 rounded-xl font-poppins"
-                    required
+                    required={!useDummyData}
                   />
                 </div>
                 <p className="text-sm text-neutral-500 font-poppins tracking-tight">
@@ -100,23 +125,23 @@ export default function OnboardingPage() {
                       <p className="text-sm text-neutral-600 font-poppins tracking-tight mt-1">
                         {useDummyData
                           ? "Demo with sample products for testing"
-                          : "Scrape real data from your store (coming soon)"}
+                          : "Scrape real data from your store"}
                       </p>
                     </div>
                   </div>
                   <Switch
                     id="data-source"
                     checked={!useDummyData}
-                    onCheckedChange={(checked) => setUseDummyData(!checked)}
+                    onCheckedChange={(checked) => {
+                      setUseDummyData(!checked)
+                      setError("")
+                    }}
                     className="flex-shrink-0"
                   />
                 </div>
-                {!useDummyData && (
-                  <div className="mt-3 pt-3 border-t border-neutral-200">
-                    <p className="text-xs text-neutral-500 font-poppins tracking-tight flex items-center gap-2">
-                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                      Live data scraping will be available soon
-                    </p>
+                {error && (
+                  <div className="mt-3 pt-3 border-t border-red-200">
+                    <p className="text-xs text-red-600 font-poppins tracking-tight">{error}</p>
                   </div>
                 )}
               </div>
