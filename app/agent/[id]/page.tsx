@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, use } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
@@ -185,9 +185,10 @@ function ProductDetailView({ product, onClose }: { product: (typeof yogaMats)[0]
   )
 }
 
-export default function AgentTestPage({ params }: { params: { id: string } }) {
+export default function AgentTestPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
-  const agent = agentData[params.id] || { name: "Agent", type: "AI Agent" }
+  const { id } = use(params)
+  const agent = agentData[id] || { name: "Agent", type: "AI Agent" }
 
   const [messages, setMessages] = useState<Message[]>([])
   const [isMuted, setIsMuted] = useState(false)

@@ -32,14 +32,46 @@ const productSchema = {
       type: "string",
       description: "The product category (e.g., yoga mats, fitness equipment)",
     },
+    sale_price: {
+      type: "number",
+      description: "The sale price if the product is on sale",
+    },
+    original_price: {
+      type: "number",
+      description: "The original price before any discount",
+    },
+    rating: {
+      type: "number",
+      description: "The product rating (e.g., 4.5 out of 5)",
+    },
+    review_count: {
+      type: "number",
+      description: "The number of reviews for this product",
+    },
+    in_stock: {
+      type: "boolean",
+      description: "Whether the product is in stock",
+    },
   },
   required: ["product_name", "price"],
+}
+
+// Schema wrapper to handle array of products
+const productsArraySchema = {
+  type: "object",
+  properties: {
+    products: {
+      type: "array",
+      description: "Array of all products found on the page",
+      items: productSchema,
+    },
+  },
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { urls } = body
+    let { urls } = body
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json({ error: "URLs array is required and must not be empty" }, { status: 400 })
@@ -51,43 +83,85 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "FIRECRAWL_API_KEY environment variable is not set" }, { status: 500 })
     }
 
-    console.log("[v0] Starting bulk Firecrawl extraction for URLs:", urls)
-
-    // Call Firecrawl extract endpoint with multiple URLs
-    const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/extract", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        urls: urls,
-        prompt:
-          "Extract product information from each page including the product name, price, description, category, brand/company, and main image URL.",
-        schema: productSchema,
-      }),
+    // Expand URLs to include common product collection paths if they're base URLs
+    const expandedUrls = urls.flatMap((url: string) => {
+      try {
+        const urlObj = new URL(url)
+        // Check if it's a base URL (just domain, or domain with just /)
+        const isBaseUrl = urlObj.pathname === '/' || urlObj.pathname === ''
+        
+        if (isBaseUrl) {
+          // Ensure URL ends with /
+          const baseUrl = url.endsWith('/') ? url : url + '/'
+          // Add common Shopify collection paths, prioritizing /collections/all
+          const collectionUrls = [
+            baseUrl + 'collections/all',
+            baseUrl + 'collections/products',
+            baseUrl + 'products',
+            baseUrl,
+          ]
+          return collectionUrls
+        }
+        return [url]
+      } catch {
+        return [url]
+      }
     })
 
-    if (!firecrawlResponse.ok) {
-      const errorText = await firecrawlResponse.text()
-      console.error("[v0] Firecrawl API error:", errorText)
-      return NextResponse.json(
-        { error: "Failed to scrape product data", details: errorText },
-        { status: firecrawlResponse.status },
-      )
-    }
+    console.log("[v0] Expanded URLs for scraping:", expandedUrls)
 
-    const firecrawlData = await firecrawlResponse.json()
-    console.log("[v0] Firecrawl response:", JSON.stringify(firecrawlData, null, 2))
+    console.log("[v0] Starting bulk Firecrawl extraction for URLs:", expandedUrls)
+
+    // Call Firecrawl scrape endpoint for each URL to get structured data
+    const scrapePromises = expandedUrls.map((url: string) =>
+      fetch("https://api.firecrawl.dev/v2/scrape", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          url: url,
+          formats: [
+            {
+              type: "json",
+              prompt:
+                "Extract ALL products from this page. For each product, extract: product name/title, current price (if on sale, use the sale price), product description, main image URL, category, and brand. Look for products in product listings, collections, and catalog sections. Include products marked as 'Sold Out'.",
+              schema: productsArraySchema,
+            },
+          ],
+        }),
+      })
+    )
+
+    const responses = await Promise.all(scrapePromises)
+    let firecrawlDataArray = []
+
+    for (const response of responses) {
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Firecrawl response for URL:", JSON.stringify(data, null, 2))
+        if (data.data && data.data.json) {
+          const jsonData = data.data.json
+          // Handle wrapper format { products: [...] }
+          if (jsonData.products && Array.isArray(jsonData.products)) {
+            firecrawlDataArray.push(...jsonData.products)
+          } else if (Array.isArray(jsonData)) {
+            firecrawlDataArray.push(...jsonData)
+          } else if (typeof jsonData === "object") {
+            firecrawlDataArray.push(jsonData)
+          }
+        }
+      } else {
+        const errorText = await response.text()
+        console.error("[v0] Firecrawl API error:", errorText)
+      }
+    }
 
     // Extract the products data from the response
     let productsData = []
-    if (Array.isArray(firecrawlData.data)) {
-      productsData = firecrawlData.data
-    } else if (firecrawlData.data && typeof firecrawlData.data === "object") {
-      productsData = [firecrawlData.data]
-    } else if (Array.isArray(firecrawlData)) {
-      productsData = firecrawlData
+    if (Array.isArray(firecrawlDataArray)) {
+      productsData = firecrawlDataArray
     }
 
     // Filter out null/undefined products and process valid ones
@@ -101,8 +175,19 @@ export async function POST(request: NextRequest) {
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-|-$/g, "")
         }
+        
+        // Use sale_price as price if available, otherwise use price
+        if (product.sale_price && !product.price) {
+          product.price = product.sale_price
+        }
+        
         return product
       })
+      // Deduplicate by product name (since we fetch multiple URLs)
+      .filter((product: any, index: number, self: any[]) => {
+        return index === self.findIndex((p: any) => p.product_name?.toLowerCase() === product.product_name?.toLowerCase())
+      })
+      .filter((product: any) => product.price && product.price > 0 && product.product_name)
 
     console.log("[v0] Successfully extracted products:", processedProducts.length)
 

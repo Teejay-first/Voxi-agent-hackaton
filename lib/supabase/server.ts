@@ -53,7 +53,7 @@ export async function fetchAgents(): Promise<AgentData[]> {
   const { data, error } = await supabase
     .from('agents')
     .select('id, name, short_desc, tagline, status_type, average_rating, total_ratings, avatar_url, category')
-    .limit(10)
+    .limit(100)
   
   if (error) {
     console.error('Error fetching agents:', error)

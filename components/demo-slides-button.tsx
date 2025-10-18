@@ -41,6 +41,11 @@ export function DemoSlidesButton() {
       {/* Slides Modal */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-screen h-screen w-screen p-0 m-0 bg-black border-none rounded-none overflow-hidden flex flex-col">
+          {/* Accessible Title for Screen Readers */}
+          <DialogTitle className="sr-only">
+            {slides[currentSlide].title} - Slide {currentSlide + 1} of {slides.length}
+          </DialogTitle>
+
           {/* Header with Close Button */}
           <div className="absolute top-0 right-0 z-10 p-4">
             <button
