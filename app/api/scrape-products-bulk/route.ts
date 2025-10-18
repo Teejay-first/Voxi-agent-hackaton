@@ -81,19 +81,28 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Firecrawl response:", JSON.stringify(firecrawlData, null, 2))
 
     // Extract the products data from the response
-    const productsData = Array.isArray(firecrawlData.data) ? firecrawlData.data : [firecrawlData.data]
+    let productsData = []
+    if (Array.isArray(firecrawlData.data)) {
+      productsData = firecrawlData.data
+    } else if (firecrawlData.data && typeof firecrawlData.data === "object") {
+      productsData = [firecrawlData.data]
+    } else if (Array.isArray(firecrawlData)) {
+      productsData = firecrawlData
+    }
 
-    // Process each product
-    const processedProducts = productsData.map((product: any) => {
-      // Generate a URL slug if not provided
-      if (!product.product_url_slug && product.product_name) {
-        product.product_url_slug = product.product_name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-      }
-      return product
-    })
+    // Filter out null/undefined products and process valid ones
+    const processedProducts = productsData
+      .filter((product: any) => product && typeof product === "object")
+      .map((product: any) => {
+        // Generate a URL slug if not provided
+        if (!product.product_url_slug && product.product_name) {
+          product.product_url_slug = product.product_name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "")
+        }
+        return product
+      })
 
     console.log("[v0] Successfully extracted products:", processedProducts.length)
 
