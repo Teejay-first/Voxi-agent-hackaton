@@ -150,67 +150,6 @@ export function CallInterface({ agentName, agentType, onEndCall }: CallInterface
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<(typeof yogaMats)[0] | null>(null)
 
-  useEffect(() => {
-    const conversationFlow = [
-      {
-        speaker: "agent" as const,
-        text: "Hello! I'm ShopBot Pro. How can I help you today?",
-        delay: 1000,
-      },
-      {
-        speaker: "user" as const,
-        text: "Hi, what kind of yoga mats do you have?",
-        delay: 2500,
-      },
-      {
-        speaker: "agent" as const,
-        text: "Great question! We have an excellent selection of yoga mats. Let me show you our top picks...",
-        delay: 2000,
-      },
-      {
-        speaker: "agent" as const,
-        genUI: (
-          <div className="space-y-3">
-            <p className="text-sm font-poppins tracking-tight text-neutral-700 mb-4">
-              Here are our most popular yoga mats:
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {yogaMats.map((mat) => (
-                <ProductCard key={mat.id} product={mat} onViewDetails={() => setSelectedProduct(mat)} />
-              ))}
-            </div>
-          </div>
-        ),
-        delay: 2000,
-      },
-      {
-        speaker: "agent" as const,
-        text: "Each mat has unique features. Would you like to know more about any specific one?",
-        delay: 1500,
-      },
-    ]
-
-    let currentDelay = 0
-    conversationFlow.forEach((item, index) => {
-      currentDelay += item.delay
-      setTimeout(() => {
-        const newMessage: Message = {
-          id: `msg-${index}`,
-          speaker: item.speaker,
-          text: item.text,
-          genUI: item.genUI,
-          timestamp: new Date(),
-        }
-        setMessages((prev) => [...prev, newMessage])
-
-        if (item.speaker === "agent") {
-          setIsAgentSpeaking(true)
-          setTimeout(() => setIsAgentSpeaking(false), 2000)
-        }
-      }, currentDelay)
-    })
-  }, [])
-
   // Call duration timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -261,7 +200,7 @@ export function CallInterface({ agentName, agentType, onEndCall }: CallInterface
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
                     <Sparkles className="w-6 h-6 text-emerald-600 animate-pulse" />
                   </div>
-                  <p className="text-neutral-500 font-poppins tracking-tight">Connecting to {agentName}...</p>
+                  <p className="text-neutral-500 font-poppins tracking-tight">Voice agent ready for connection...</p>
                 </div>
               </div>
             )}
