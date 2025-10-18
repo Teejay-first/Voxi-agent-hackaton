@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Sparkles, Check, Loader2 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { Suspense } from "react"
 
 export const dynamic = "force-dynamic"
 
@@ -17,7 +18,7 @@ const buildSteps = [
   { id: 6, label: "Finalizing your agent", duration: 1500 },
 ]
 
-export default function BuildPage() {
+function BuildPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [currentStep, setCurrentStep] = useState(0)
@@ -269,5 +270,13 @@ export default function BuildPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function BuildPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <BuildPageContent />
+    </Suspense>
   )
 }
