@@ -16,7 +16,7 @@ export default function OnboardingPage() {
   const router = useRouter()
   const [storeUrl, setStoreUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [useDummyData, setUseDummyData] = useState(true)
+  const [useDummyData, setUseDummyData] = useState(false)
   const [error, setError] = useState("")
 
   const validateUrl = (url: string): boolean => {
@@ -45,7 +45,9 @@ export default function OnboardingPage() {
     if (!useDummyData) {
       params.append("storeUrl", storeUrl)
     }
-    params.append("useDummyData", String(useDummyData))
+    if (useDummyData) {
+      params.append("useDummyData", "true")
+    }
 
     // Navigate to build mode with params
     router.push(`/build?${params.toString()}`)
